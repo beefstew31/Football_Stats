@@ -24,27 +24,40 @@ export default function App(){
     return r.json()
   }
 
-  async function loadSeason(season){
-    try{
-      setStatus('Loading…')
-      const [st, pl, leaders] = await Promise.all([
-        fetchJSON(`stats/${season}/standings.json`),
-        fetchJSON(`stats/${season}/players/index.json`),
-        fetchJSON(`stats/${season}/leaders.json`).catch(()=>null),
-      ])
-      setStandings(st); setPlayers(pl); setLeaders(leaders)
-      const teams = (st||[]).map(x=>x.team)
-      const schedEntries = await Promise.all(teams.map(
-        t => fetchJSON(`stats/${season}/teams/${encodeURIComponent(t)}.json`).then(rows=>[t, rows]).catch(()=>[t, []])
-      ))
-      const map = Object.fromEntries(schedEntries)
-      setSchedulesByTeam(map)
-      setStatus('Loaded')
-    }catch(e){
-      console.warn(e); setStatus('')
-      setStandings(null); setPlayers(null); setLeaders(null); setSchedulesByTeam({})
-    }
+async function loadSeason(season){
+  try{
+    setStatus('Loading…');
+    // fetch snapshots
+    const [st, pl, leaders] = await Promise.all([
+      fetchJSON(`stats/${season}/standings.json`).catch(()=>[]),
+      fetchJSON(`stats/${season}/players/index.json`).catch(()=>[]),
+      fetchJSON(`stats/${season}/leaders.json`).catch(()=>null),
+    ]);
+    setStandings(st);
+    setPlayers(pl);
+    setLeaders(leaders);
+
+    // 👉 Build team list from players first (always present), then standings
+    const teamsFromPlayers = Array.from(new Set((pl || []).map(p => p.team).filter(Boolean)));
+    const teamsFromStandings = (st || []).map(x => x.team).filter(Boolean);
+    const teams = Array.from(new Set([...teamsFromPlayers, ...teamsFromStandings])).sort();
+
+    // fetch each team's schedule json if it exists
+    const entries = await Promise.all(teams.map(
+      t => fetchJSON(`stats/${season}/teams/${encodeURIComponent(t)}.json`)
+             .then(rows => [t, rows])
+             .catch(() => [t, []]) // okay if some teams don’t have schedules yet
+    ));
+    const map = Object.fromEntries(entries);
+    setSchedulesByTeam(map);
+    setStatus('Loaded');
+  }catch(e){
+    console.warn(e);
+    setStatus('');
+    setStandings(null); setPlayers(null); setLeaders(null); setSchedulesByTeam({});
   }
+}
+
 
   useEffect(()=>{ if (season) loadSeason(season) }, [season])
 
