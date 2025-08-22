@@ -79,61 +79,81 @@ export default function Upload({ season, setLeadersData, onPublished }) {
       .map(canonical)
       .filter((r) => String(r.season) === String(season));
 
-    // ----- schedules & standings -----
-    const games = [];
-    const byGame = groupBy(
-      rows.filter((r) => r.home_team && r.away_team),
-      (r) => r.game_id || `${r.date}-${r.home_team}-${r.away_team}`
-    );
-    Object.values(byGame).forEach((g) => {
-      const a = g[0];
-      const home = a.home_team,
-        away = a.away_team;
-      const hs = a.home_score,
-        as = a.away_score;
-      const resH = hs > as ? "W" : hs < as ? "L" : "T";
-      const resA = hs < as ? "W" : hs > as ? "L" : "T";
-      games.push({
-        team: home,
-        date: a.date,
-        week: a.week,
-        opponent: away,
-        home_away: "H",
-        result: `${hs}-${as} ${resH}`,
-      });
-      games.push({
-        team: away,
-        date: a.date,
-        week: a.week,
-        opponent: home,
-        home_away: "A",
-        result: `${as}-${hs} ${resA}`,
-      });
-    });
+   // ----- schedules & standings (robust even without home_/away_ cols) -----
+const games = [];
 
-    const schedulesByTeamArr = Object.values(groupBy(games, (g) => g.team));
+// group rows into "games" using the best key we can
+const normKey = (r) => {
+  // prefer explicit game_id
+  if (r.game_id) return `gid:${r.game_id}`;
+  // otherwise make a symmetric key so TeamA vs TeamB matches both ways
+  const a = (r.team || "").trim();
+  const b = (r.opponent || "").trim();
+  const [t1, t2] = [a, b].sort();
+  return `d:${r.date}|w:${r.week}|${t1}__vs__${t2}`;
+};
 
-    const standingsMap = {};
-    games.forEach((g) => {
-      const [us, , res] = (g.result || "").split(" ");
-      const [pf, pa] = us.split("-").map(Number);
-      const t = g.team;
-      standingsMap[t] = standingsMap[t] || { team: t, w: 0, l: 0, t: 0, pf: 0, pa: 0 };
-      standingsMap[t].pf += pf || 0;
-      standingsMap[t].pa += pa || 0;
-      if (res === "W") standingsMap[t].w++;
-      else if (res === "L") standingsMap[t].l++;
-      else standingsMap[t].t++;
-    });
+const byGame = groupBy(rows.filter(r => r.team && r.opponent), normKey);
 
-    const standings = Object.values(standingsMap)
-      .map((s) => ({
-        ...s,
-        pct: (s.w + 0.5 * s.t) / Math.max(1, s.w + s.l + s.t),
-      }))
-      .sort(
-        (a, b) => b.pct - a.pct || (b.pf - b.pa) - (a.pf - a.pa)
-      );
+Object.values(byGame).forEach(list => {
+  // infer participants & meta
+  const sample = list[0];
+  const date = sample.date, week = sample.week;
+
+  // Try to discover the two teams reliably
+  const teamsInRows = new Set();
+  list.forEach(r => { if (r.team) teamsInRows.add(r.team); if (r.opponent) teamsInRows.add(r.opponent); });
+  const [T1, T2] = [...teamsInRows].slice(0,2);
+
+  // If explicit home/away exist anywhere in the group, use them
+  let home = sample.home_team || "";
+  let away = sample.away_team || "";
+  if ((!home || !away) && T1 && T2) {
+    // fallback: just pick a stable home/away assignment
+    [home, away] = [T1, T2];
+  }
+
+  // compute scores if provided
+  const hs = Number(sample.home_score || 0);
+  const as = Number(sample.away_score || 0);
+  const haveScores = Number.isFinite(hs) && Number.isFinite(as) && (hs > 0 || as > 0);
+
+  // push two schedule rows (home & away teams)
+  if (home && away) {
+    const resH = haveScores ? (hs > as ? "W" : hs < as ? "L" : "T") : "";
+    const resA = haveScores ? (as > hs ? "W" : as < hs ? "L" : "T") : "";
+    games.push({ team: home, date, week, opponent: away, home_away: "H", result: haveScores ? `${hs}-${as} ${resH}` : "" });
+    games.push({ team: away, date, week, opponent: home, home_away: "A", result: haveScores ? `${as}-${hs} ${resA}` : "" });
+  } else if (T1 && T2) {
+    // extreme fallback: no home/away at all
+    games.push({ team: T1, date, week, opponent: T2, home_away: "-", result: "" });
+    games.push({ team: T2, date, week, opponent: T1, home_away: "-", result: "" });
+  }
+});
+
+// schedules → { [team]: Game[] }
+const schedulesByTeam = groupBy(games, g => g.team);
+
+// standings only if we have scores; otherwise zeros
+const standingsMap = {};
+games.forEach(g => {
+  if (!g.result) return; // no scores yet
+  const [us, , res] = (g.result || "").split(" ");
+  const [pf, pa] = (us || "").split("-").map(Number);
+  const t = g.team;
+  standingsMap[t] = standingsMap[t] || { team: t, w:0, l:0, t:0, pf:0, pa:0 };
+  standingsMap[t].pf += pf || 0; standingsMap[t].pa += pa || 0;
+  if (res === "W") standingsMap[t].w++; else if (res === "L") standingsMap[t].l++; else standingsMap[t].t++;
+});
+
+const standings = Object.values(standingsMap).map(s => ({
+  ...s,
+  pct: (s.w + 0.5 * s.t) / Math.max(1, s.w + s.l + s.t),
+})).sort((a,b) => b.pct - a.pct || (b.pf - b.pa) - (a.pf - a.pa));
+
+// schedules map for publishing
+const schedMap = {};
+Object.entries(schedulesByTeam).forEach(([team, list]) => { schedMap[team] = list; });
 
     // ----- players (season totals) -----
     const byPlayer = groupBy(
