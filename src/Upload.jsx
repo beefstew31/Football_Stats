@@ -118,7 +118,7 @@ Object.values(byGame).forEach(list => {
   const as = Number(sample.away_score || 0);
   const haveScores = Number.isFinite(hs) && Number.isFinite(as) && (hs > 0 || as > 0);
 
-  // push two schedule rows (home & away teams)
+  // push two ule rows (home & away teams)
   if (home && away) {
     const resH = haveScores ? (hs > as ? "W" : hs < as ? "L" : "T") : "";
     const resA = haveScores ? (as > hs ? "W" : as < hs ? "L" : "T") : "";
@@ -131,8 +131,8 @@ Object.values(byGame).forEach(list => {
   }
 });
 
-// schedules → { [team]: Game[] }
-const schedulesByTeam = groupBy(games, g => g.team);
+// ules → { [team]: Game[] }
+const ulesByTeam = groupBy(games, g => g.team);
 
 // standings only if we have scores; otherwise zeros
 const standingsMap = {};
@@ -150,10 +150,6 @@ const standings = Object.values(standingsMap).map(s => ({
   ...s,
   pct: (s.w + 0.5 * s.t) / Math.max(1, s.w + s.l + s.t),
 })).sort((a,b) => b.pct - a.pct || (b.pf - b.pa) - (a.pf - a.pa));
-
-// schedules map for publishing
-const schedMap = {};
-Object.entries(schedulesByTeam).forEach(([team, list]) => { schedMap[team] = list; });
 
     // ----- players (season totals) -----
     const byPlayer = groupBy(
