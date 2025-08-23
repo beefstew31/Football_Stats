@@ -145,7 +145,38 @@ function compute(all) {
       games.push({ team: T2, date, week, opponent: T1, home_away: "-", result: "" });
     }
   });
+// ---- NEW: career by player (all seasons present in the CSVs you uploaded) ----
+const allRows = all.map(canonical).filter(r => r.player); // no season filter
+const byPlayerSeason = groupBy(allRows, r => `${r.player}||${r.team}||${r.season}`);
 
+const careerByPlayerKey = {}; // key = "player||team" -> [{ season, team, ...totals }]
+Object.entries(byPlayerSeason).forEach(([k, list]) => {
+  const [player, team, sea] = k.split("||");
+  const totals = {
+    season: sea, team,
+    pass_att: sum(list,"pass_att"), pass_cmp: sum(list,"pass_cmp"),
+    pass_yds: sum(list,"pass_yds"), pass_td: sum(list,"pass_td"), pass_int: sum(list,"pass_int"),
+    rush_att: sum(list,"rush_att"), rush_yds: sum(list,"rush_yds"), rush_td: sum(list,"rush_td"),
+    rec_rec: sum(list,"rec_rec"),   rec_tgt: sum(list,"rec_tgt"),
+    rec_yds: sum(list,"rec_yds"),   rec_td:  sum(list,"rec_td"),
+  };
+  const key = `${player}||${team}`;
+  (careerByPlayerKey[key] = careerByPlayerKey[key] || []).push(totals);
+});
+
+// keep newest season first
+Object.values(careerByPlayerKey).forEach(arr =>
+  arr.sort((a,b) => String(b.season).localeCompare(String(a.season)))
+);
+
+// also keep per-player **logs** for the selected season (you already had this)
+const logsByPlayerKey = groupBy(
+  rows.filter(r => r.player),
+  r => `${r.player}||${r.team}`
+);
+
+// return everything compute() made
+return { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlayerKey };
   // schedules -> object keyed by team
   const schedulesByTeam = groupBy(games, (g) => g.team);
 
