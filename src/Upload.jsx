@@ -230,7 +230,7 @@ export default function Upload({ season, setLeadersData, onPublished }) {
       await uploadJSON(`stats/${season}/leaders.json`, leaders);
       setLeadersData && setLeadersData(leaders);
 
-      await Promise.all(
+      /* await Promise.all(
         Object.entries(logsByPlayerKey).map(([key, list]) => {
           const [player, team] = key.split("||");
           const slug = slugPlayer(player, team);
@@ -245,6 +245,7 @@ export default function Upload({ season, setLeadersData, onPublished }) {
           return uploadJSON(`career/players/${slug}.json`, arr);
         })
       );
+      */
 
       setMsg("Published!");
       onPublished && onPublished(season);
