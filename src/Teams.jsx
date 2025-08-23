@@ -11,9 +11,11 @@ export function Teams({ season, team, setTeam, schedulesByTeam }) {
         <h3>Teams</h3>
         <select value={team} onChange={e => setTeam(e.target.value)}>
           <option value="">— Select team —</option>
-          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+          {teams.map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
         </select>
-      </div>
+    </div>
 
       <div className="spacer"></div>
 
@@ -32,7 +34,9 @@ export function Teams({ season, team, setTeam, schedulesByTeam }) {
       ) : (
         <table>
           <thead>
-            <tr><th>Date</th><th>Week</th><th>Opponent</th><th>H/A</th><th>Result</th></tr>
+            <tr>
+              <th>Date</th><th>Week</th><th>Opponent</th><th>H/A</th><th>Result</th>
+            </tr>
           </thead>
           <tbody>
             {games.map((g, i) => (
