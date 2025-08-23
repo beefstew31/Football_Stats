@@ -29,7 +29,7 @@ function Tile({ label, value }) {
   );
 }
 
-export default function PlayerPage() {
+export default function Players() {
   const { season, playerSlug } = useParams();
   const { player, team } = unslugPlayer(playerSlug);
 
