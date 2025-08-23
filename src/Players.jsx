@@ -1,3 +1,4 @@
+// src/players.jsx
 import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { supa } from "./supa";
@@ -6,16 +7,22 @@ import { unslugPlayer } from "./slug";
 function usePublicJson(path) {
   const [data, setData] = React.useState(null);
   React.useEffect(() => {
-    let live = true;
+    let alive = true;
     (async () => {
-      const { data: url } = supa.storage
-        .from(import.meta.env.VITE_SUPABASE_BUCKET)
-        .getPublicUrl(path);
-      const r = await fetch(url.publicUrl);
-      if (!live) return;
-      setData(r.ok ? await r.json() : null);
+      try {
+        const { data: url } = supa
+          .storage
+          .from(import.meta.env.VITE_SUPABASE_BUCKET)
+          .getPublicUrl(path);
+        if (!url?.publicUrl) return;
+        const r = await fetch(url.publicUrl, { cache: "no-store" });
+        const json = r.ok ? await r.json() : null;
+        if (alive) setData(json);
+      } catch {
+        if (alive) setData(null);
+      }
     })();
-    return () => { live = false; };
+    return () => { alive = false; };
   }, [path]);
   return data;
 }
@@ -33,18 +40,16 @@ export default function Players() {
   const { season, playerSlug } = useParams();
   const { player, team } = unslugPlayer(playerSlug);
 
-  // current season game log + totals
+  // data
   const logs = usePublicJson(`stats/${season}/players/logs/${playerSlug}.json`) || [];
   const seasonIndex = usePublicJson(`stats/${season}/players/index.json`) || [];
   const totals = React.useMemo(
-    () => (seasonIndex || []).find(p => p.player === player && p.team === team) || null,
+    () => seasonIndex.find(p => p.player === player && p.team === team) || null,
     [seasonIndex, player, team]
   );
-
-  // career (all seasons you’ve uploaded)
   const career = usePublicJson(`career/players/${playerSlug}.json`) || [];
 
-  // compute QB rating (optional)
+  // QB rating (NFL formula)
   const rating = React.useMemo(() => {
     if (!totals || !totals.pass_att) return 0;
     const a = Math.max(0, Math.min(2.375, ((totals.pass_cmp / totals.pass_att) - 0.3) * 5));
@@ -56,16 +61,19 @@ export default function Players() {
 
   return (
     <div className="wrap">
-      {/* header mimic */}
+      {/* Header */}
       <div className="card" style={{ padding: 20 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <div className="row" style={{ gap: 12, alignItems: "center" }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: "50%",
-              background: "#0e131a", border: "1px solid #2a3140",
-              display: "grid", placeItems: "center", fontWeight: 800, fontSize: 22
-            }}>
-              {player.split(" ").map(s => s[0]).join("").slice(0,2)}
+            <div
+              style={{
+                width: 64, height: 64, borderRadius: "50%",
+                background: "#0e131a", border: "1px solid #2a3140",
+                display: "grid", placeItems: "center", fontWeight: 800, fontSize: 22
+              }}
+              title={player}
+            >
+              {player.split(" ").map(s => s[0]).join("").slice(0, 2)}
             </div>
             <div>
               <div style={{ fontSize: 28, fontWeight: 900 }}>{player}</div>
@@ -78,7 +86,7 @@ export default function Players() {
           </div>
         </div>
 
-        {/* quick season tiles */}
+        {/* Season tiles */}
         <div className="grid" style={{ marginTop: 16 }}>
           <Tile label="Pass Yds" value={totals?.pass_yds} />
           <Tile label="Pass TD"  value={totals?.pass_td} />
@@ -91,13 +99,12 @@ export default function Players() {
         </div>
       </div>
 
-      {/* GAME LOG */}
+      {/* Game Log */}
       <div className="spacer"></div>
       <div className="card">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h3 style={{ margin: 0 }}>Game Log — {season}</h3>
           <div className="row">
-            {/* simple season switcher using career list */}
             <span className="muted" style={{ marginRight: 8 }}>Season:</span>
             <select
               value={season}
@@ -114,7 +121,7 @@ export default function Players() {
           </div>
         </div>
         <div className="spacer"></div>
-        {(!logs || !logs.length) ? (
+        {!logs.length ? (
           <div className="muted">No game log found for this season.</div>
         ) : (
           <table>
@@ -150,11 +157,11 @@ export default function Players() {
         )}
       </div>
 
-      {/* SEASON-BY-SEASON (career) */}
+      {/* Season-by-Season */}
       <div className="spacer"></div>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Season-by-Season</h3>
-        {!career?.length ? (
+        {!career.length ? (
           <div className="muted">No career totals yet. Upload multiple seasons and republish.</div>
         ) : (
           <table>
