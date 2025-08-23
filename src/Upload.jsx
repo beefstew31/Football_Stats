@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Papa from "papaparse";
 import { uploadJSON, UPLOAD_PASSWORD } from "./supa";
 import { nflRating, groupBy, sum } from "./utils";
+import { slugPlayer } from "./slug";
 
 export default function Upload({ season, setLeadersData, onPublished }) {
   const [pass, setPass] = useState("");
@@ -74,196 +75,168 @@ export default function Upload({ season, setLeadersData, onPublished }) {
     };
   }
 
-function compute(all) {
-  // normalize & keep only the chosen season
-  const rows = all
-    .map(canonical)
-    .filter((r) => String(r.season) === String(season));
+  function compute(all) {
+    // normalize & keep only the chosen season
+    const rows = all.map(canonical).filter((r) => String(r.season) === String(season));
 
-  // ----- schedules & standings (robust even without home_/away_ cols) -----
-  const games = [];
+    // ----- schedules & standings (robust even without home_/away_) -----
+    const games = [];
 
-  // Build a symmetric game key (so A vs B == B vs A) if no game_id present
-  const normKey = (r) => {
-    if (r.game_id) return `gid:${r.game_id}`;
-    const a = (r.team || "").trim();
-    const b = (r.opponent || "").trim();
-    const [t1, t2] = [a, b].sort();
-    return `d:${r.date}|w:${r.week}|${t1}__vs__${t2}`;
-  };
-
-  const byGame = groupBy(
-    rows.filter((r) => r.team && r.opponent),
-    normKey
-  );
-
-  Object.values(byGame).forEach((list) => {
-    const sample = list[0];
-    const date = sample.date;
-    const week = sample.week;
-
-    // Gather the two teams involved
-    const teamsInRows = new Set();
-    list.forEach((r) => {
-      if (r.team) teamsInRows.add(r.team);
-      if (r.opponent) teamsInRows.add(r.opponent);
-    });
-    const [T1, T2] = [...teamsInRows].slice(0, 2);
-
-    // Prefer explicit home/away; otherwise pick a stable order
-    let home = sample.home_team || "";
-    let away = sample.away_team || "";
-    if ((!home || !away) && T1 && T2) [home, away] = [T1, T2];
-
-    const hs = Number(sample.home_score || 0);
-    const as = Number(sample.away_score || 0);
-    const haveScores =
-      Number.isFinite(hs) && Number.isFinite(as) && (hs > 0 || as > 0);
-
-    if (home && away) {
-      const resH = haveScores ? (hs > as ? "W" : hs < as ? "L" : "T") : "";
-      const resA = haveScores ? (as > hs ? "W" : as < hs ? "L" : "T") : "";
-      games.push({
-        team: home,
-        date,
-        week,
-        opponent: away,
-        home_away: "H",
-        result: haveScores ? `${hs}-${as} ${resH}` : "",
-      });
-      games.push({
-        team: away,
-        date,
-        week,
-        opponent: home,
-        home_away: "A",
-        result: haveScores ? `${as}-${hs} ${resA}` : "",
-      });
-    } else if (T1 && T2) {
-      // Fallback: no home/away at all
-      games.push({ team: T1, date, week, opponent: T2, home_away: "-", result: "" });
-      games.push({ team: T2, date, week, opponent: T1, home_away: "-", result: "" });
-    }
-  });
-// ---- NEW: career by player (all seasons present in the CSVs you uploaded) ----
-const allRows = all.map(canonical).filter(r => r.player); // no season filter
-const byPlayerSeason = groupBy(allRows, r => `${r.player}||${r.team}||${r.season}`);
-
-const careerByPlayerKey = {}; // key = "player||team" -> [{ season, team, ...totals }]
-Object.entries(byPlayerSeason).forEach(([k, list]) => {
-  const [player, team, sea] = k.split("||");
-  const totals = {
-    season: sea, team,
-    pass_att: sum(list,"pass_att"), pass_cmp: sum(list,"pass_cmp"),
-    pass_yds: sum(list,"pass_yds"), pass_td: sum(list,"pass_td"), pass_int: sum(list,"pass_int"),
-    rush_att: sum(list,"rush_att"), rush_yds: sum(list,"rush_yds"), rush_td: sum(list,"rush_td"),
-    rec_rec: sum(list,"rec_rec"),   rec_tgt: sum(list,"rec_tgt"),
-    rec_yds: sum(list,"rec_yds"),   rec_td:  sum(list,"rec_td"),
-  };
-  const key = `${player}||${team}`;
-  (careerByPlayerKey[key] = careerByPlayerKey[key] || []).push(totals);
-});
-
-// keep newest season first
-Object.values(careerByPlayerKey).forEach(arr =>
-  arr.sort((a,b) => String(b.season).localeCompare(String(a.season)))
-);
-
-// also keep per-player **logs** for the selected season (you already had this)
-const logsByPlayerKey = groupBy(
-  rows.filter(r => r.player),
-  r => `${r.player}||${r.team}`
-);
-
-// return everything compute() made
-return { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlayerKey };
-  // schedules -> object keyed by team
-  const schedulesByTeam = groupBy(games, (g) => g.team);
-
-  // standings (only if we have scores)
-  const standingsMap = {};
-  games.forEach((g) => {
-    if (!g.result) return;
-    const [us, , res] = (g.result || "").split(" ");
-    const [pf, pa] = (us || "").split("-").map(Number);
-    const t = g.team;
-    standingsMap[t] = standingsMap[t] || { team: t, w: 0, l: 0, t: 0, pf: 0, pa: 0 };
-    standingsMap[t].pf += pf || 0;
-    standingsMap[t].pa += pa || 0;
-    if (res === "W") standingsMap[t].w++;
-    else if (res === "L") standingsMap[t].l++;
-    else standingsMap[t].t++;
-  });
-
-  const standings = Object.values(standingsMap)
-    .map((s) => ({
-      ...s,
-      pct: (s.w + 0.5 * s.t) / Math.max(1, s.w + s.l + s.t),
-    }))
-    .sort((a, b) => b.pct - a.pct || (b.pf - b.pa) - (a.pf - a.pa));
-
-  // ----- players (season totals) -----
-  const byPlayer = groupBy(
-    rows.filter((r) => r.player),
-    (r) => `${r.player}||${r.team}`
-  );
-  const playerAgg = Object.values(byPlayer).map((list) => {
-    const base = list[0];
-    return {
-      season: base.season,
-      player: base.player,
-      team: base.team,
-      position: base.position,
-      pass_att: sum(list, "pass_att"),
-      pass_cmp: sum(list, "pass_cmp"),
-      pass_yds: sum(list, "pass_yds"),
-      pass_td: sum(list, "pass_td"),
-      pass_int: sum(list, "pass_int"),
-      rush_att: sum(list, "rush_att"),
-      rush_yds: sum(list, "rush_yds"),
-      rush_td: sum(list, "rush_td"),
-      rec_rec: sum(list, "rec_rec"),
-      rec_tgt: sum(list, "rec_tgt"),
-      rec_yds: sum(list, "rec_yds"),
-      rec_td: sum(list, "rec_td"),
+    const normKey = (r) => {
+      if (r.game_id) return `gid:${r.game_id}`;
+      const a = (r.team || "").trim();
+      const b = (r.opponent || "").trim();
+      const [t1, t2] = [a, b].sort();
+      return `d:${r.date}|w:${r.week}|${t1}__vs__${t2}`;
     };
-  });
 
-  // ----- leaders -----
-  const passQ = playerAgg.filter((p) => p.pass_att >= 14);
-  const rushQ = playerAgg.filter((p) => p.rush_att >= 14);
-  const recvQ = playerAgg.filter((p) => p.rec_tgt >= 10);
+    const byGame = groupBy(rows.filter((r) => r.team && r.opponent), normKey);
 
-  const rating = passQ.map((p) => ({
-    ...p,
-    rating: Number(
-      nflRating(p.pass_cmp, p.pass_att, p.pass_yds, p.pass_td, p.pass_int).toFixed(1)
-    ),
-  }));
+    Object.values(byGame).forEach((list) => {
+      const sample = list[0];
+      const date = sample.date;
+      const week = sample.week;
 
-  const leaders = {
-    season,
-    generated_at: new Date().toISOString(),
-    categories: {
-      passing_yards: [...passQ].sort((a, b) => b.pass_yds - a.pass_yds).slice(0, 25),
-      passing_tds: [...passQ].sort((a, b) => b.pass_td - a.pass_td).slice(0, 25),
-      passer_rating: [...rating].sort((a, b) => b.rating - a.rating).slice(0, 25),
-      rushing_yards: [...rushQ].sort((a, b) => b.rush_yds - a.rush_yds).slice(0, 25),
-      rushing_tds: [...rushQ].sort((a, b) => b.rush_td - a.rush_td).slice(0, 25),
-      receiving_yards: [...recvQ].sort((a, b) => b.rec_yds - a.rec_yds).slice(0, 25),
-      receiving_tds: [...recvQ].sort((a, b) => b.rec_td - a.rec_td).slice(0, 25),
-    },
-  };
+      const teamsInRows = new Set();
+      list.forEach((r) => {
+        if (r.team) teamsInRows.add(r.team);
+        if (r.opponent) teamsInRows.add(r.opponent);
+      });
+      const [T1, T2] = [...teamsInRows].slice(0, 2);
 
-  // schedules map for publishing (no schedulesByTeamArr anywhere)
-  const schedMap = {};
-  Object.entries(schedulesByTeam).forEach(([team, list]) => {
-    schedMap[team] = list;
-  });
+      let home = sample.home_team || "";
+      let away = sample.away_team || "";
+      if ((!home || !away) && T1 && T2) [home, away] = [T1, T2];
 
-  return { standings, schedMap, playerAgg, leaders };
-}
+      const hs = Number(sample.home_score || 0);
+      const as = Number(sample.away_score || 0);
+      const haveScores = Number.isFinite(hs) && Number.isFinite(as) && (hs > 0 || as > 0);
 
+      if (home && away) {
+        const resH = haveScores ? (hs > as ? "W" : hs < as ? "L" : "T") : "";
+        const resA = haveScores ? (as > hs ? "W" : as < hs ? "L" : "T") : "";
+        games.push({ team: home, date, week, opponent: away, home_away: "H", result: haveScores ? `${hs}-${as} ${resH}` : "" });
+        games.push({ team: away, date, week, opponent: home, home_away: "A", result: haveScores ? `${as}-${hs} ${resA}` : "" });
+      } else if (T1 && T2) {
+        games.push({ team: T1, date, week, opponent: T2, home_away: "-", result: "" });
+        games.push({ team: T2, date, week, opponent: T1, home_away: "-", result: "" });
+      }
+    });
+
+    // schedules -> object keyed by team
+    const schedulesByTeam = groupBy(games, (g) => g.team);
+
+    // standings (only if we have scores)
+    const standingsMap = {};
+    games.forEach((g) => {
+      if (!g.result) return;
+      const [us, , res] = (g.result || "").split(" ");
+      const [pf, pa] = (us || "").split("-").map(Number);
+      const t = g.team;
+      standingsMap[t] = standingsMap[t] || { team: t, w: 0, l: 0, t: 0, pf: 0, pa: 0 };
+      standingsMap[t].pf += pf || 0;
+      standingsMap[t].pa += pa || 0;
+      if (res === "W") standingsMap[t].w++;
+      else if (res === "L") standingsMap[t].l++;
+      else standingsMap[t].t++;
+    });
+
+    const standings = Object.values(standingsMap)
+      .map((s) => ({ ...s, pct: (s.w + 0.5 * s.t) / Math.max(1, s.w + s.l + s.t) }))
+      .sort((a, b) => b.pct - a.pct || (b.pf - b.pa) - (a.pf - a.pa));
+
+    // ----- players (season totals) -----
+    const byPlayer = groupBy(rows.filter((r) => r.player), (r) => `${r.player}||${r.team}`);
+    const playerAgg = Object.values(byPlayer).map((list) => {
+      const base = list[0];
+      return {
+        season: base.season,
+        player: base.player,
+        team: base.team,
+        position: base.position,
+        pass_att: sum(list, "pass_att"),
+        pass_cmp: sum(list, "pass_cmp"),
+        pass_yds: sum(list, "pass_yds"),
+        pass_td: sum(list, "pass_td"),
+        pass_int: sum(list, "pass_int"),
+        rush_att: sum(list, "rush_att"),
+        rush_yds: sum(list, "rush_yds"),
+        rush_td: sum(list, "rush_td"),
+        rec_rec: sum(list, "rec_rec"),
+        rec_tgt: sum(list, "rec_tgt"),
+        rec_yds: sum(list, "rec_yds"),
+        rec_td: sum(list, "rec_td"),
+      };
+    });
+
+    // ----- leaders -----
+    const passQ = playerAgg.filter((p) => p.pass_att >= 14);
+    const rushQ = playerAgg.filter((p) => p.rush_att >= 14);
+    const recvQ = playerAgg.filter((p) => p.rec_tgt >= 10);
+
+    const rating = passQ.map((p) => ({
+      ...p,
+      rating: Number(nflRating(p.pass_cmp, p.pass_att, p.pass_yds, p.pass_td, p.pass_int).toFixed(1)),
+    }));
+
+    const leaders = {
+      season,
+      generated_at: new Date().toISOString(),
+      categories: {
+        passing_yards: [...passQ].sort((a, b) => b.pass_yds - a.pass_yds).slice(0, 25),
+        passing_tds:   [...passQ].sort((a, b) => b.pass_td  - a.pass_td ).slice(0, 25),
+        passer_rating: [...rating].sort((a, b) => b.rating   - a.rating  ).slice(0, 25),
+        rushing_yards: [...rushQ].sort((a, b) => b.rush_yds - a.rush_yds).slice(0, 25),
+        rushing_tds:   [...rushQ].sort((a, b) => b.rush_td  - a.rush_td ).slice(0, 25),
+        receiving_yards:[...recvQ].sort((a, b) => b.rec_yds - a.rec_yds).slice(0, 25),
+        receiving_tds: [...recvQ].sort((a, b) => b.rec_td  - a.rec_td ).slice(0, 25),
+      },
+    };
+
+    // per-player logs for the selected season
+    const logsByPlayerKey = groupBy(
+      rows.filter((r) => r.player),
+      (r) => `${r.player}||${r.team}`
+    );
+
+    // career across all seasons present in uploads
+    const allRows = all.map(canonical).filter((r) => r.player);
+    const byPlayerSeason = groupBy(allRows, (r) => `${r.player}||${r.team}||${r.season}`);
+
+    const careerByPlayerKey = {};
+    Object.entries(byPlayerSeason).forEach(([k, list]) => {
+      const [player, team, sea] = k.split("||");
+      const totals = {
+        season: sea,
+        team,
+        pass_att: sum(list, "pass_att"),
+        pass_cmp: sum(list, "pass_cmp"),
+        pass_yds: sum(list, "pass_yds"),
+        pass_td:  sum(list, "pass_td"),
+        pass_int: sum(list, "pass_int"),
+        rush_att: sum(list, "rush_att"),
+        rush_yds: sum(list, "rush_yds"),
+        rush_td:  sum(list, "rush_td"),
+        rec_rec:  sum(list, "rec_rec"),
+        rec_tgt:  sum(list, "rec_tgt"),
+        rec_yds:  sum(list, "rec_yds"),
+        rec_td:   sum(list, "rec_td"),
+      };
+      const key = `${player}||${team}`;
+      (careerByPlayerKey[key] = careerByPlayerKey[key] || []).push(totals);
+    });
+    Object.values(careerByPlayerKey).forEach((arr) =>
+      arr.sort((a, b) => String(b.season).localeCompare(String(a.season)))
+    );
+
+    // schedules map for publishing
+    const schedMap = {};
+    Object.entries(schedulesByTeam).forEach(([team, list]) => {
+      schedMap[team] = list;
+    });
+
+    return { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlayerKey };
+  }
 
   const publish = async () => {
     if (!season) return alert("Enter a season at the top right first.");
@@ -271,20 +244,44 @@ return { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlaye
     setBusy(true);
     setMsg("Computing…");
     try {
-      const { standings, schedMap, playerAgg, leaders } = compute(rows);
+      const { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlayerKey } =
+        compute(rows);
+
       setMsg("Uploading snapshots…");
+
+      // standings
       await uploadJSON(`stats/${season}/standings.json`, standings);
+
+      // team schedules
       await Promise.all(
         Object.entries(schedMap).map(([team, games]) =>
-          uploadJSON(
-            `stats/${season}/teams/${encodeURIComponent(team)}.json`,
-            games
-          )
+          uploadJSON(`stats/${season}/teams/${encodeURIComponent(team)}.json`, games)
         )
       );
+
+      // players index + leaders
       await uploadJSON(`stats/${season}/players/index.json`, playerAgg);
       await uploadJSON(`stats/${season}/leaders.json`, leaders);
-      setLeadersData(leaders);
+
+      // per-player game logs for THIS season
+      await Promise.all(
+        Object.entries(logsByPlayerKey).map(([key, list]) => {
+          const [player, team] = key.split("||");
+          const slug = slugPlayer(player, team);
+          return uploadJSON(`stats/${season}/players/logs/${slug}.json`, list);
+        })
+      );
+
+      // career per player (across all seasons uploaded)
+      await Promise.all(
+        Object.entries(careerByPlayerKey).map(([key, arr]) => {
+          const [player, team] = key.split("||");
+          const slug = slugPlayer(player, team);
+          return uploadJSON(`career/players/${slug}.json`, arr);
+        })
+      );
+
+      setLeadersData && setLeadersData(leaders);
       setMsg("Published!");
       onPublished && onPublished(season);
     } catch (e) {
@@ -294,24 +291,7 @@ return { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlaye
       setBusy(false);
     }
   };
-// per-player logs for this season
-await Promise.all(
-  Object.entries(logsByPlayerKey).map(([key, list]) => {
-    const [player, team] = key.split("||");
-    const slug = slugPlayer(player, team);
-    return uploadJSON(`stats/${season}/players/logs/${slug}.json`, list);
-  })
-);
 
-// NEW: per-player career file (all seasons you’ve uploaded so far)
-// stored one time (not tied to a season path)
-await Promise.all(
-  Object.entries(careerByPlayerKey).map(([key, arr]) => {
-    const [player, team] = key.split("||");
-    const slug = slugPlayer(player, team);
-    return uploadJSON(`career/players/${slug}.json`, arr);
-  })
-);
   return (
     <div className="card">
       <h3>Upload & Publish</h3>
