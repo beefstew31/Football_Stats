@@ -202,4 +202,38 @@ export default function TeamPage() {
       </Card>
     </div>
   );
+import { Link } from "react-router-dom";
+
+export function Teams({ season, team, setTeam, schedulesByTeam }) {
+  const teams = Object.keys(schedulesByTeam || {}).sort();
+  const games = team ? schedulesByTeam[team] || [] : [];
+
+  return (
+    <div className="card">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h3>Teams</h3>
+        <select value={team} onChange={e=>setTeam(e.target.value)}>
+          <option value="">— Select team —</option>
+          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      <div className="spacer"></div>
+
+      {/* quick links */}
+      <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {teams.map(t => (
+          <Link key={t} className="btn" to={`/season/${season}/team/${encodeURIComponent(t)}`}>
+            {t}
+          </Link>
+        ))}
+      </div>
+
+      {/* inline table when using the dropdown */}
+      {!team ? <div className="muted">Pick a team or click a button above.</div> : (
+        <table> … (your existing table) … </table>
+      )}
+    </div>
+  );
 }
+
