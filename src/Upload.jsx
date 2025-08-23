@@ -239,58 +239,67 @@ export default function Upload({ season, setLeadersData, onPublished }) {
   }
 
   const publish = async () => {
-    if (!season) return alert("Enter a season at the top right first.");
-    if (!rows.length) return alert("Upload CSV(s) first");
-    setBusy(true);
-    setMsg("Computing…");
-    try {
-      const { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlayerKey } =
-        compute(rows);
+  if (!season) return alert("Enter a season at the top right first.");
+  if (!rows.length) return alert("Upload CSV(s) first");
 
-      setMsg("Uploading snapshots…");
+  setBusy(true);
+  setMsg("Computing…");
 
-      // standings
-      await uploadJSON(`stats/${season}/standings.json`, standings);
+  try {
+    const {
+      standings,
+      schedMap,
+      playerAgg,
+      leaders,
+      logsByPlayerKey,
+      careerByPlayerKey,
+    } = compute(rows);
 
-      // team schedules
-      await Promise.all(
-        Object.entries(schedMap).map(([team, games]) =>
-          uploadJSON(`stats/${season}/teams/${encodeURIComponent(team)}.json`, games)
-        )
-      );
+    setMsg("Uploading snapshots…");
 
-      // players index + leaders
-      await uploadJSON(`stats/${season}/players/index.json`, playerAgg);
-      await uploadJSON(`stats/${season}/leaders.json`, leaders);
+    // standings
+    await uploadJSON(`stats/${season}/standings.json`, standings);
 
-      // per-player game logs for THIS season
-      await Promise.all(
-        Object.entries(logsByPlayerKey).map(([key, list]) => {
-          const [player, team] = key.split("||");
-          const slug = slugPlayer(player, team);
-          return uploadJSON(`stats/${season}/players/logs/${slug}.json`, list);
-        })
-      );
+    // team schedules
+    await Promise.all(
+      Object.entries(schedMap).map(([team, games]) =>
+        uploadJSON(`stats/${season}/teams/${encodeURIComponent(team)}.json`, games)
+      )
+    );
 
-      // career per player (across all seasons uploaded)
-      await Promise.all(
-        Object.entries(careerByPlayerKey).map(([key, arr]) => {
-          const [player, team] = key.split("||");
-          const slug = slugPlayer(player, team);
-          return uploadJSON(`career/players/${slug}.json`, arr);
-        })
-      );
+    // players + leaders
+    await uploadJSON(`stats/${season}/players/index.json`, playerAgg);
+    await uploadJSON(`stats/${season}/leaders.json`, leaders);
+    setLeadersData(leaders);
 
-      setLeadersData && setLeadersData(leaders);
-      setMsg("Published!");
-      onPublished && onPublished(season);
-    } catch (e) {
-      console.error(e);
-      setMsg("Error: " + e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+    // ✅ per-player logs (THIS SEASON)
+    await Promise.all(
+      Object.entries(logsByPlayerKey).map(([key, list]) => {
+        const [player, team] = key.split("||");
+        const slug = slugPlayer(player, team);
+        return uploadJSON(`stats/${season}/players/logs/${slug}.json`, list);
+      })
+    );
+
+    // ✅ career logs (all seasons)
+    await Promise.all(
+      Object.entries(careerByPlayerKey).map(([key, arr]) => {
+        const [player, team] = key.split("||");
+        const slug = slugPlayer(player, team);
+        return uploadJSON(`career/players/${slug}.json`, arr);
+      })
+    );
+
+    setMsg("Published!");
+    onPublished && onPublished(season);
+  } catch (e) {
+    console.error(e);
+    setMsg("Error: " + e.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
 
   return (
     <div className="card">
