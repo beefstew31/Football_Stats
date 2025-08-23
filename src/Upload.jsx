@@ -294,7 +294,24 @@ return { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlaye
       setBusy(false);
     }
   };
+// per-player logs for this season
+await Promise.all(
+  Object.entries(logsByPlayerKey).map(([key, list]) => {
+    const [player, team] = key.split("||");
+    const slug = slugPlayer(player, team);
+    return uploadJSON(`stats/${season}/players/logs/${slug}.json`, list);
+  })
+);
 
+// NEW: per-player career file (all seasons you’ve uploaded so far)
+// stored one time (not tied to a season path)
+await Promise.all(
+  Object.entries(careerByPlayerKey).map(([key, arr]) => {
+    const [player, team] = key.split("||");
+    const slug = slugPlayer(player, team);
+    return uploadJSON(`career/players/${slug}.json`, arr);
+  })
+);
   return (
     <div className="card">
       <h3>Upload & Publish</h3>
