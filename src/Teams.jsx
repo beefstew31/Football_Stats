@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 /* sanity marker so we know the right file is building */
-console.log("[TeamList.jsx] loaded");
+console.log("[Teams.jsx] loaded");
 
 export function Teams({ season, team, setTeam, schedulesByTeam }) {
   const teams = Object.keys(schedulesByTeam || {}).sort();
