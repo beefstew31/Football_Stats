@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import Papa from "papaparse";
 import { uploadJSON, UPLOAD_PASSWORD } from "./supa";
 import { nflRating, groupBy, sum } from "./utils";
+import { slugPlayer } from "./slug"; // <-- needed for per-player filenames
 
 console.log("[Upload.jsx] loaded");
 
@@ -78,7 +79,11 @@ export default function Upload({ season, setLeadersData, onPublished }) {
   }
 
   function compute(all) {
-    const rows = all.map(canonical).filter((r) => String(r.season) === String(season));
+    // normalize rows for everything
+    const allNorm = all.map(canonical);
+
+    // rows for the chosen season only
+    const rows = allNorm.filter((r) => String(r.season) === String(season));
 
     // ----- schedules -----
     const games = [];
@@ -104,8 +109,22 @@ export default function Upload({ season, setLeadersData, onPublished }) {
       if (home && away) {
         const resH = scored ? (hs > as ? "W" : hs < as ? "L" : "T") : "";
         const resA = scored ? (as > hs ? "W" : as < hs ? "L" : "T") : "";
-        games.push({ team: home, date: s.date, week: s.week, opponent: away, home_away: "H", result: scored ? `${hs}-${as} ${resH}` : "" });
-        games.push({ team: away, date: s.date, week: s.week, opponent: home, home_away: "A", result: scored ? `${as}-${hs} ${resA}` : "" });
+        games.push({
+          team: home,
+          date: s.date,
+          week: s.week,
+          opponent: away,
+          home_away: "H",
+          result: scored ? `${hs}-${as} ${resH}` : "",
+        });
+        games.push({
+          team: away,
+          date: s.date,
+          week: s.week,
+          opponent: home,
+          home_away: "A",
+          result: scored ? `${as}-${hs} ${resA}` : "",
+        });
       } else if (T1 && T2) {
         games.push({ team: T1, date: s.date, week: s.week, opponent: T2, home_away: "-", result: "" });
         games.push({ team: T2, date: s.date, week: s.week, opponent: T1, home_away: "-", result: "" });
@@ -124,7 +143,9 @@ export default function Upload({ season, setLeadersData, onPublished }) {
       standingsMap[t] = standingsMap[t] || { team: t, w: 0, l: 0, t: 0, pf: 0, pa: 0 };
       standingsMap[t].pf += pf || 0;
       standingsMap[t].pa += pa || 0;
-      if (res === "W") standingsMap[t].w++; else if (res === "L") standingsMap[t].l++; else standingsMap[t].t++;
+      if (res === "W") standingsMap[t].w++;
+      else if (res === "L") standingsMap[t].l++;
+      else standingsMap[t].t++;
     });
 
     const standings = Object.values(standingsMap)
@@ -136,12 +157,22 @@ export default function Upload({ season, setLeadersData, onPublished }) {
     const playerAgg = Object.values(byPlayer).map((list) => {
       const b = list[0];
       return {
-        season: b.season, player: b.player, team: b.team, position: b.position,
-        pass_att: sum(list, "pass_att"), pass_cmp: sum(list, "pass_cmp"),
-        pass_yds: sum(list, "pass_yds"), pass_td: sum(list, "pass_td"), pass_int: sum(list, "pass_int"),
-        rush_att: sum(list, "rush_att"), rush_yds: sum(list, "rush_yds"), rush_td: sum(list, "rush_td"),
-        rec_rec: sum(list, "rec_rec"), rec_tgt: sum(list, "rec_tgt"),
-        rec_yds: sum(list, "rec_yds"), rec_td: sum(list, "rec_td"),
+        season: b.season,
+        player: b.player,
+        team: b.team,
+        position: b.position,
+        pass_att: sum(list, "pass_att"),
+        pass_cmp: sum(list, "pass_cmp"),
+        pass_yds: sum(list, "pass_yds"),
+        pass_td: sum(list, "pass_td"),
+        pass_int: sum(list, "pass_int"),
+        rush_att: sum(list, "rush_att"),
+        rush_yds: sum(list, "rush_yds"),
+        rush_td: sum(list, "rush_td"),
+        rec_rec: sum(list, "rec_rec"),
+        rec_tgt: sum(list, "rec_tgt"),
+        rec_yds: sum(list, "rec_yds"),
+        rec_td: sum(list, "rec_td"),
       };
     });
 
@@ -158,20 +189,60 @@ export default function Upload({ season, setLeadersData, onPublished }) {
       generated_at: new Date().toISOString(),
       categories: {
         passing_yards: [...passQ].sort((a, b) => b.pass_yds - a.pass_yds).slice(0, 25),
-        passing_tds:   [...passQ].sort((a, b) => b.pass_td  - a.pass_td ).slice(0, 25),
-        passer_rating: [...rating].sort((a, b) => b.rating   - a.rating  ).slice(0, 25),
+        passing_tds: [...passQ].sort((a, b) => b.pass_td - a.pass_td).slice(0, 25),
+        passer_rating: [...rating].sort((a, b) => b.rating - a.rating).slice(0, 25),
         rushing_yards: [...rushQ].sort((a, b) => b.rush_yds - a.rush_yds).slice(0, 25),
-        rushing_tds:   [...rushQ].sort((a, b) => b.rush_td  - a.rush_td ).slice(0, 25),
-        receiving_yards:[...recvQ].sort((a, b) => b.rec_yds - a.rec_yds).slice(0, 25),
-        receiving_tds: [...recvQ].sort((a, b) => b.rec_td  - a.rec_td ).slice(0, 25),
+        rushing_tds: [...rushQ].sort((a, b) => b.rush_td - a.rush_td).slice(0, 25),
+        receiving_yards: [...recvQ].sort((a, b) => b.rec_yds - a.rec_yds).slice(0, 25),
+        receiving_tds: [...recvQ].sort((a, b) => b.rec_td - a.rec_td).slice(0, 25),
       },
     };
 
+    // ----- per-player logs for this SEASON -----
+    const logsByPlayerKey = groupBy(
+      rows.filter((r) => r.player),
+      (r) => `${r.player}||${r.team}`
+    );
+
+    // ----- per-player CAREER (all seasons uploaded) -----
+    const byPlayerSeason = groupBy(
+      allNorm.filter((r) => r.player),
+      (r) => `${r.player}||${r.team}||${r.season}`
+    );
+
+    const careerByPlayerKey = {};
+    Object.entries(byPlayerSeason).forEach(([k, list]) => {
+      const [player, team, sea] = k.split("||");
+      const totals = {
+        season: sea,
+        team,
+        pass_att: sum(list, "pass_att"),
+        pass_cmp: sum(list, "pass_cmp"),
+        pass_yds: sum(list, "pass_yds"),
+        pass_td: sum(list, "pass_td"),
+        pass_int: sum(list, "pass_int"),
+        rush_att: sum(list, "rush_att"),
+        rush_yds: sum(list, "rush_yds"),
+        rush_td: sum(list, "rush_td"),
+        rec_rec: sum(list, "rec_rec"),
+        rec_tgt: sum(list, "rec_tgt"),
+        rec_yds: sum(list, "rec_yds"),
+        rec_td: sum(list, "rec_td"),
+      };
+      const key = `${player}||${team}`;
+      (careerByPlayerKey[key] = careerByPlayerKey[key] || []).push(totals);
+    });
+    Object.values(careerByPlayerKey).forEach((arr) =>
+      arr.sort((a, b) => String(b.season).localeCompare(String(a.season)))
+    );
+
     // schedules map for publishing
     const schedMap = {};
-    Object.entries(schedulesByTeam).forEach(([team, list]) => { schedMap[team] = list; });
+    Object.entries(schedulesByTeam).forEach(([team, list]) => {
+      schedMap[team] = list;
+    });
 
-    return { standings, schedMap, playerAgg, leaders };
+    return { standings, schedMap, playerAgg, leaders, logsByPlayerKey, careerByPlayerKey };
   }
 
   // ---------- publish ----------
@@ -183,21 +254,49 @@ export default function Upload({ season, setLeadersData, onPublished }) {
     setMsg("Computing…");
 
     try {
-      const { standings, schedMap, playerAgg, leaders } = compute(rows);
+      const {
+        standings,
+        schedMap,
+        playerAgg,
+        leaders,
+        logsByPlayerKey,
+        careerByPlayerKey,
+      } = compute(rows);
 
       setMsg("Uploading snapshots…");
 
+      // standings
       await uploadJSON(`stats/${season}/standings.json`, standings);
 
+      // team schedules
       await Promise.all(
         Object.entries(schedMap).map(([team, games]) =>
           uploadJSON(`stats/${season}/teams/${encodeURIComponent(team)}.json`, games)
         )
       );
 
+      // player index + leaders
       await uploadJSON(`stats/${season}/players/index.json`, playerAgg);
       await uploadJSON(`stats/${season}/leaders.json`, leaders);
       if (setLeadersData) setLeadersData(leaders);
+
+      // per-player logs (THIS SEASON)
+      await Promise.all(
+        Object.entries(logsByPlayerKey).map(([key, list]) => {
+          const [player, team] = key.split("||");
+          const slug = slugPlayer(player, team);
+          return uploadJSON(`stats/${season}/players/logs/${slug}.json`, list);
+        })
+      );
+
+      // per-player CAREER (ALL seasons you’ve uploaded)
+      await Promise.all(
+        Object.entries(careerByPlayerKey).map(([key, arr]) => {
+          const [player, team] = key.split("||");
+          const slug = slugPlayer(player, team);
+          return uploadJSON(`career/players/${slug}.json`, arr);
+        })
+      );
 
       setMsg("Published!");
       if (onPublished) onPublished(season);
