@@ -1,18 +1,18 @@
 // src/Teams.jsx
-import React from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { supa } from './supa';
+import React from "react";
+import { useParams, Link } from "react-router-dom";
+import { supa } from "./supa";
 
 const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET;
 
-// Fetch a JSON file from Supabase Storage and avoid CDN caching
-async function fetchJsonFromStorage(path) {
-  const { data: url } = supa.storage.from(BUCKET).getPublicUrl(path);
-  const fetchUrl = `${url.publicUrl}?cb=${Date.now()}`;
-  const res = await fetch(fetchUrl, { cache: 'no-store' });
+// Fetches JSON from Supabase Storage with a cache‑buster
+async function fetchJson(path) {
+  const { data } = supa.storage.from(BUCKET).getPublicUrl(path);
+  const url = `${data.publicUrl}?cb=${Date.now()}`;
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
-    const err = new Error(`GET ${path} -> ${res.status}`);
-    err.body = await res.text().catch(() => '');
+    const err = new Error(`GET ${path}: ${res.status} ${res.statusText}`);
+    err.body = await res.text().catch(() => "");
     throw err;
   }
   return res.json();
@@ -20,81 +20,77 @@ async function fetchJsonFromStorage(path) {
 
 export default function Teams({ season: seasonProp }) {
   const params = useParams();
-  const season = params.season || seasonProp || '';
-  const [team, setTeam] = React.useState('');
+  const season = params.season || seasonProp || "";
+  const [team, setTeam] = React.useState("");
   const [teams, setTeams] = React.useState([]);
   const [games, setGames] = React.useState([]);
-  const [err, setErr] = React.useState('');
+  const [err, setErr] = React.useState("");
 
-  // Load list of team names when the season changes
+  // load teams from players/index.json or standings.json
   React.useEffect(() => {
     if (!season) return;
-    let live = true;
+    let cancelled = false;
     (async () => {
-      setErr('');
+      setErr("");
       setTeams([]);
-      setTeam('');
+      setTeam("");
+
       try {
         let names = [];
+        // 1) Try players index
         try {
-          const standings = await fetchJsonFromStorage(`stats/${season}/standings.json`);
-          names = (standings || []).map((s) => s.team).filter(Boolean);
+          const index = await fetchJson(`stats/${season}/players/index.json`);
+          names = [...new Set(index.map((p) => p.team))].filter(Boolean);
         } catch {
-          const { data: files, error } = await supa.storage
-            .from(BUCKET)
-            .list(`stats/${season}/teams`, { limit: 500 });
-          if (error) throw error;
-          names = (files || [])
-            .filter((f) => f.name.toLowerCase().endsWith('.json'))
-            .map((f) => decodeURIComponent(f.name.replace(/\.json$/i, '')));
+          // 2) Fallback to standings.json
+          const standings = await fetchJson(`stats/${season}/standings.json`);
+          names = standings.map((s) => s.team).filter(Boolean);
         }
-        names = Array.from(new Set(names)).sort();
-        if (live) {
+        names.sort();
+        if (!cancelled) {
           setTeams(names);
           if (!team && names.length) setTeam(names[0]);
         }
       } catch (e) {
-        if (live) setErr(e.message || 'Failed to load teams.');
+        if (!cancelled) setErr(e.message || "Unable to load teams.");
       }
     })();
     return () => {
-      live = false;
+      cancelled = true;
     };
   }, [season]);
 
-  // Load schedule for the selected team
+  // load schedule for selected team
   React.useEffect(() => {
     if (!season || !team) return;
-    let live = true;
+    let cancelled = false;
     (async () => {
-      setErr('');
+      setErr("");
       setGames([]);
       try {
-        const json = await fetchJsonFromStorage(`stats/${season}/teams/${encodeURIComponent(team)}.json`);
-        if (live) setGames(Array.isArray(json) ? json : []);
+        const data = await fetchJson(`stats/${season}/teams/${encodeURIComponent(team)}.json`);
+        if (!cancelled) setGames(Array.isArray(data) ? data : []);
       } catch (e) {
-        if (live) setErr(e.message || 'Failed to load schedule.');
+        if (!cancelled) setErr(e.message || "Unable to load schedule.");
       }
     })();
     return () => {
-      live = false;
+      cancelled = true;
     };
   }, [season, team]);
 
-  if (!season) return <div className="muted">Enter a season (top right).</div>;
+  if (!season) return <div className="muted">Enter a season (top‑right).</div>;
 
   return (
     <div className="card">
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0 }}>Teams</h3>
-        <select value={team} onChange={(e) => setTeam(e.target.value)}>
-          <option value="">— Select team —</option>
-          {teams.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+      <h3 style={{ margin: 0 }}>Teams</h3>
+      <select value={team} onChange={(e) => setTeam(e.target.value)}>
+        <option value="">— Select team —</option>
+        {teams.map((t) => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
       </div>
       <div className="spacer" />
       {err && <div className="muted">Error: {err}</div>}
@@ -106,11 +102,7 @@ export default function Teams({ season: seasonProp }) {
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Week</th>
-              <th>Opponent</th>
-              <th>H/A</th>
-              <th>Result</th>
+              <th>Date</th><th>Week</th><th>Opponent</th><th>H/A</th><th>Result</th>
             </tr>
           </thead>
           <tbody>
@@ -118,9 +110,7 @@ export default function Teams({ season: seasonProp }) {
               <tr key={i}>
                 <td>{g.date}</td>
                 <td>{g.week}</td>
-                <td>
-                  <Link to={`/season/${season}/team/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>
-                </td>
+                <td><Link to={`/season/${season}/team/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link></td>
                 <td>{g.home_away}</td>
                 <td>{g.result}</td>
               </tr>
