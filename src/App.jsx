@@ -3,38 +3,40 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import "./styles.css";
 
-import * as StandingsMod from "./Standings.jsx";
-import * as TeamsMod from "./Teams.jsx";
-import * as PlayersMod from "./Players.jsx";
-import * as UploadMod from "./Upload.jsx";
-import * as HomeMod from "./Home.jsx";
+// import each module; use default and named exports as needed
+import Home from "./Home.jsx";
+import Standings from "./Standings.jsx";
+import Teams from "./Teams.jsx";
+import Players, { PlayerPage } from "./Players.jsx"; // PlayerPage is explicitly imported
+import Upload from "./Upload.jsx";
 
-const Standings = StandingsMod.default ?? StandingsMod.Standings;
-const Teams     = TeamsMod.default     ?? TeamsMod.Teams;
-const Players   = PlayersMod.default   ?? PlayersMod.Players ?? PlayersMod.PlayerPage;
-const Upload    = UploadMod.default    ?? UploadMod.Upload;
-const Home      = HomeMod.default      ?? HomeMod.Home;
-
-// optional placeholders for auth pages
+/*
+  You can later connect these to your authentication provider.
+  For now, they just show simple placeholder pages.
+*/
 const SignUp = () => (
   <div className="wrap">
-    <h2 style={{marginTop:0}}>Sign up</h2>
-    <p className="muted">Hook this to Supabase Auth or your provider later.</p>
+    <h2 style={{ marginTop: 0 }}>Sign up</h2>
+    <p className="muted">Hook this to Supabase Auth or another provider later.</p>
   </div>
 );
+
 const LogIn = () => (
   <div className="wrap">
-    <h2 style={{marginTop:0}}>Log in</h2>
-    <p className="muted">Hook this to Supabase Auth or your provider later.</p>
+    <h2 style={{ marginTop: 0 }}>Log in</h2>
+    <p className="muted">Hook this to Supabase Auth or another provider later.</p>
   </div>
 );
 
 export default function App() {
-  const [season, setSeason] = React.useState(localStorage.getItem("fs_season") || "");
+  // maintain season globally so that it can be passed down to children
+  const [season, setSeason] = React.useState(
+    localStorage.getItem("fs_season") || ""
+  );
 
-  const handleSeason = (v) => {
-    setSeason(v);
-    localStorage.setItem("fs_season", v);
+  const handleSeason = (value) => {
+    setSeason(value);
+    localStorage.setItem("fs_season", value);
   };
 
   return (
@@ -44,17 +46,28 @@ export default function App() {
         <Route path="/" element={<Home season={season} />} />
         <Route path="/standings" element={<Standings season={season} />} />
         <Route path="/teams" element={<Teams season={season} />} />
+        {/* Players renders the list by default */}
         <Route path="/players" element={<Players season={season} />} />
         <Route path="/upload" element={<Upload season={season} />} />
 
-        {/* deep routes */}
-        <Route path="/season/:season/team/:teamName" element={<Teams />} />
-        <Route path="/season/:season/player/:playerSlug" element={<Players />} />
+        {/* Deeper routes:
+            - Team page: use Teams again so it can read params
+            - Player page: use PlayerPage (imported above) to show single-player view
+        */}
+        <Route
+          path="/season/:season/team/:teamName"
+          element={<Teams />}
+        />
+        <Route
+          path="/season/:season/player/:playerSlug"
+          element={<PlayerPage />}
+        />
 
         {/* auth placeholders */}
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<LogIn />} />
 
+        {/* Catch all: redirect unknown routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
@@ -65,18 +78,30 @@ function TopNav({ season, onSeasonChange }) {
   return (
     <header className="nav">
       <div className="nav-left">
-        <Link className="brand" to="/">PennLive</Link>
-        <Link className="tab" to="/teams">Teams</Link>
-        <Link className="tab" to="/standings">Standings</Link>
-        <Link className="tab" to="/players">Player Stats</Link>
-        <Link className="tab" to="/upload">Upload</Link>
+        <Link className="brand" to="/">
+          PennLive
+        </Link>
+        <Link className="tab" to="/teams">
+          Teams
+        </Link>
+        <Link className="tab" to="/standings">
+          Standings
+        </Link>
+        <Link className="tab" to="/players">
+          Player Stats
+        </Link>
+        <Link className="tab" to="/upload">
+          Upload
+        </Link>
       </div>
       <div className="nav-right">
-        <label className="muted">Season</label>
+      <label className="muted" style={{ marginRight: 8 }}>
+          Season
+        </label>
         <input
           placeholder="e.g. 2025"
           value={season}
-          onChange={(e)=>onSeasonChange(e.target.value)}
+          onChange={(e) => onSeasonChange(e.target.value)}
           className="season-input"
         />
       </div>
