@@ -5,14 +5,13 @@ import { supa } from './supa';
 
 const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET;
 
-// Helper to fetch a public JSON file from Supabase Storage.
+// Fetch a JSON file from Supabase Storage and avoid CDN caching
 async function fetchJsonFromStorage(path) {
   const { data: url } = supa.storage.from(BUCKET).getPublicUrl(path);
-  // add a timestamp query param to avoid stale CDN caches
   const fetchUrl = `${url.publicUrl}?cb=${Date.now()}`;
   const res = await fetch(fetchUrl, { cache: 'no-store' });
   if (!res.ok) {
-    const err = new Error(`GET ${path} failed with ${res.status}`);
+    const err = new Error(`GET ${path} -> ${res.status}`);
     err.body = await res.text().catch(() => '');
     throw err;
   }
@@ -27,23 +26,20 @@ export default function Teams({ season: seasonProp }) {
   const [games, setGames] = React.useState([]);
   const [err, setErr] = React.useState('');
 
-  // Load list of team names
+  // Load list of team names when the season changes
   React.useEffect(() => {
     if (!season) return;
     let live = true;
-
     (async () => {
       setErr('');
       setTeams([]);
       setTeam('');
       try {
-        // Try reading standings.json first
         let names = [];
         try {
           const standings = await fetchJsonFromStorage(`stats/${season}/standings.json`);
           names = (standings || []).map((s) => s.team).filter(Boolean);
         } catch {
-          // fallback: list actual team files
           const { data: files, error } = await supa.storage
             .from(BUCKET)
             .list(`stats/${season}/teams`, { limit: 500 });
@@ -52,7 +48,6 @@ export default function Teams({ season: seasonProp }) {
             .filter((f) => f.name.toLowerCase().endsWith('.json'))
             .map((f) => decodeURIComponent(f.name.replace(/\.json$/i, '')));
         }
-
         names = Array.from(new Set(names)).sort();
         if (live) {
           setTeams(names);
@@ -62,7 +57,6 @@ export default function Teams({ season: seasonProp }) {
         if (live) setErr(e.message || 'Failed to load teams.');
       }
     })();
-
     return () => {
       live = false;
     };
@@ -72,19 +66,16 @@ export default function Teams({ season: seasonProp }) {
   React.useEffect(() => {
     if (!season || !team) return;
     let live = true;
-
     (async () => {
       setErr('');
       setGames([]);
       try {
-        const path = `stats/${season}/teams/${encodeURIComponent(team)}.json`;
-        const json = await fetchJsonFromStorage(path);
+        const json = await fetchJsonFromStorage(`stats/${season}/teams/${encodeURIComponent(team)}.json`);
         if (live) setGames(Array.isArray(json) ? json : []);
       } catch (e) {
         if (live) setErr(e.message || 'Failed to load schedule.');
       }
     })();
-
     return () => {
       live = false;
     };
@@ -105,11 +96,8 @@ export default function Teams({ season: seasonProp }) {
           ))}
         </select>
       </div>
-
       <div className="spacer" />
-
       {err && <div className="muted">Error: {err}</div>}
-
       {!team ? (
         <div className="muted">Pick a team.</div>
       ) : !games.length ? (
@@ -131,9 +119,7 @@ export default function Teams({ season: seasonProp }) {
                 <td>{g.date}</td>
                 <td>{g.week}</td>
                 <td>
-                  <Link to={`/season/${season}/team/${encodeURIComponent(g.opponent)}`}>
-                    {g.opponent}
-                  </Link>
+                  <Link to={`/season/${season}/team/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>
                 </td>
                 <td>{g.home_away}</td>
                 <td>{g.result}</td>
