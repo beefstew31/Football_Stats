@@ -1,2 +1,9 @@
-export function slugPlayer(player, team){ return encodeURIComponent(`${player}__${team}`); }
-export function unslugPlayer(slug){ const [player, team] = decodeURIComponent(slug).split("__"); return {player, team}; }
+// player name + team -> slug "First Last__Team"
+export const slugPlayer = (player, team) =>
+  encodeURIComponent(`${player}__${team}`);
+
+// reverse
+export const unslugPlayer = (slug) => {
+  const [player, team] = decodeURIComponent(slug).split("__");
+  return { player, team };
+};
