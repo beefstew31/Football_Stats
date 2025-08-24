@@ -1,0 +1,86 @@
+/* -------- Light theme base -------- */
+:root{
+  --bg: #ffffff;
+  --text: #0b1220;
+  --muted: #6b7280;
+  --brand: #0b5fff;
+  --brand-600:#1d4ed8;
+  --brand-700:#1e40af;
+  --card: #f8fafc;
+  --border: #e5e7eb;
+}
+
+*{ box-sizing: border-box; }
+html,body,#root{ height: 100%; }
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+}
+
+/* ---- Top nav ---- */
+.nav{
+  position: sticky;
+  top:0;
+  z-index: 10;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(6px);
+}
+.nav-left{ display:flex; gap:16px; align-items:center; }
+.brand{
+  font-weight: 800; letter-spacing:.2px; text-decoration:none; color:var(--text);
+}
+.tab{
+  text-decoration:none; color:#334155; padding:6px 10px; border-radius:8px;
+}
+.tab:hover{ background:#eef2ff; color:var(--brand-700); }
+.nav-right{ display:flex; align-items:center; gap:8px; }
+.season-input{
+  height: 34px; padding: 6px 10px; border-radius: 10px; border:1px solid var(--border);
+  background:#fff; color:var(--text); outline:none;
+}
+.season-input:focus{ border-color: var(--brand); box-shadow:0 0 0 3px rgba(11,95,255,.12); }
+
+/* ---- Layout helpers ---- */
+.wrap{ max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+/* ---- Landing hero ---- */
+.hero {
+  max-width: 900px;
+  margin: 40px auto 0;
+  text-align:center;
+}
+.hero-logo{
+  width:min(480px, 80vw);
+  display:block; margin: 0 auto 18px; border-radius:16px;
+}
+.hero h1{ font-size: clamp(28px, 3.2vw, 40px); margin: 10px 0 6px; }
+.hero p{ color: var(--muted); margin: 0 0 22px; }
+
+/* ---- Button styles ---- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; padding: 10px 14px; border-radius: 12px;
+  border:1px solid var(--border); background:#fff; color:var(--text);
+  text-decoration:none; font-weight:600; box-shadow: 0 1px 0 rgba(0,0,0,.02);
+}
+.btn:hover{ background:#f8fafc; }
+.btn.primary{
+  background: var(--brand); color:#fff; border-color: var(--brand);
+}
+.btn.primary:hover{ background: var(--brand-600); }
+.btn.ghost{
+  background:#fff; color:var(--brand-700); border-color:#c7d2fe;
+}
+.btn-row{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+
+/* ---- Cards (used elsewhere) ---- */
+.card{
+  background: var(--card); border:1px solid var(--border);
+  border-radius: 12px; padding: 16px;
+}
+.muted{ color: var(--muted); }
