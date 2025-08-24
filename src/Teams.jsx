@@ -38,12 +38,12 @@ export default function Teams({ season: seasonProp }) {
           const index = await fetchJsonFromStorage(`stats/${season}/players/index.json`);
           names = Array.from(new Set(index.map(p => p.team)));
         } catch {
-          // Fallback: list team files
+          // Fallback: list actual team files
           const { data: files, error } = await supa.storage
             .from(BUCKET)
             .list(`stats/${season}/teams`, { limit: 500 });
           if (error) throw error;
-          names = files
+          names = (files || [])
             .filter(f => f.name.toLowerCase().endsWith('.json'))
             .map(f => decodeURIComponent(f.name.replace(/\.json$/i, '')));
         }
@@ -67,7 +67,7 @@ export default function Teams({ season: seasonProp }) {
       setErr('');
       setGames([]);
       try {
-        const path = `stats/${season}/teams/${encodeURIComponent(team)}.json`;
+        const path = `stats/${season}/teams/${team}.json`;
         const json = await fetchJsonFromStorage(path);
         if (live) setGames(Array.isArray(json) ? json : []);
       } catch (e) {
@@ -110,7 +110,8 @@ export default function Teams({ season: seasonProp }) {
                 <td>{g.date}</td>
                 <td>{g.week}</td>
                 <td>
-                  <Link to={`/season/${season}/team/${encodeURIComponent(g.opponent)}`}>
+                  {/* Do NOT double-encode; React Router handles spaces automatically */}
+                  <Link to={`/season/${season}/team/${g.opponent}`}>
                     {g.opponent}
                   </Link>
                 </td>
