@@ -1,20 +1,19 @@
 // src/Teams.jsx
-import React from "react";
-import { useParams, Link } from "react-router-dom";
-import { supa } from "./supa";
+import React from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { supa } from './supa';
 
 const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET;
 
-// helper to fetch a public JSON from Supabase Storage with cache-busting
+// Helper to fetch a public JSON file from Supabase Storage.
 async function fetchJsonFromStorage(path) {
-  const { data: pub } = supa.storage.from(BUCKET).getPublicUrl(path);
-  // add a cache-buster so CDN never serves stale content
-  const url = pub.publicUrl + (pub.publicUrl.includes("?") ? "&" : "?") + "cb=" + Date.now();
-  const res = await fetch(url, { cache: "no-store" });
+  const { data: url } = supa.storage.from(BUCKET).getPublicUrl(path);
+  // add a timestamp query param to avoid stale CDN caches
+  const fetchUrl = `${url.publicUrl}?cb=${Date.now()}`;
+  const res = await fetch(fetchUrl, { cache: 'no-store' });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    const err = new Error(`GET ${path} -> ${res.status} ${res.statusText}`);
-    err.body = text;
+    const err = new Error(`GET ${path} failed with ${res.status}`);
+    err.body = await res.text().catch(() => '');
     throw err;
   }
   return res.json();
@@ -22,12 +21,11 @@ async function fetchJsonFromStorage(path) {
 
 export default function Teams({ season: seasonProp }) {
   const params = useParams();
-  const season = params.season || seasonProp || "";
-
-  const [team, setTeam] = React.useState("");
+  const season = params.season || seasonProp || '';
+  const [team, setTeam] = React.useState('');
   const [teams, setTeams] = React.useState([]);
   const [games, setGames] = React.useState([]);
-  const [err, setErr] = React.useState("");
+  const [err, setErr] = React.useState('');
 
   // Load list of team names
   React.useEffect(() => {
@@ -35,24 +33,24 @@ export default function Teams({ season: seasonProp }) {
     let live = true;
 
     (async () => {
-      setErr("");
+      setErr('');
       setTeams([]);
-      setTeam("");
+      setTeam('');
       try {
-        // 1) Try to derive from standings.json (fast & consistent)
+        // Try reading standings.json first
         let names = [];
         try {
           const standings = await fetchJsonFromStorage(`stats/${season}/standings.json`);
           names = (standings || []).map((s) => s.team).filter(Boolean);
         } catch {
-          // 2) Fallback: list files in /teams/ (if list is allowed)
+          // fallback: list actual team files
           const { data: files, error } = await supa.storage
             .from(BUCKET)
             .list(`stats/${season}/teams`, { limit: 500 });
           if (error) throw error;
           names = (files || [])
-            .filter((f) => f.name.toLowerCase().endsWith(".json"))
-            .map((f) => decodeURIComponent(f.name.replace(/\.json$/i, "")));
+            .filter((f) => f.name.toLowerCase().endsWith('.json'))
+            .map((f) => decodeURIComponent(f.name.replace(/\.json$/i, '')));
         }
 
         names = Array.from(new Set(names)).sort();
@@ -61,14 +59,13 @@ export default function Teams({ season: seasonProp }) {
           if (!team && names.length) setTeam(names[0]);
         }
       } catch (e) {
-        if (live) setErr(e.message || "Failed to load teams.");
+        if (live) setErr(e.message || 'Failed to load teams.');
       }
     })();
 
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [season]);
 
   // Load schedule for the selected team
@@ -77,14 +74,14 @@ export default function Teams({ season: seasonProp }) {
     let live = true;
 
     (async () => {
-      setErr("");
+      setErr('');
       setGames([]);
       try {
         const path = `stats/${season}/teams/${encodeURIComponent(team)}.json`;
         const json = await fetchJsonFromStorage(path);
         if (live) setGames(Array.isArray(json) ? json : []);
       } catch (e) {
-        if (live) setErr(e.message || "Failed to load schedule.");
+        if (live) setErr(e.message || 'Failed to load schedule.');
       }
     })();
 
@@ -93,11 +90,11 @@ export default function Teams({ season: seasonProp }) {
     };
   }, [season, team]);
 
-  if (!season) return <div className="muted">Enter a season (top-right).</div>;
+  if (!season) return <div className="muted">Enter a season (top right).</div>;
 
   return (
     <div className="card">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>Teams</h3>
         <select value={team} onChange={(e) => setTeam(e.target.value)}>
           <option value="">— Select team —</option>
