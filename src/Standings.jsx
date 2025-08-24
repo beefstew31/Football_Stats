@@ -1,53 +1,77 @@
 // src/Standings.jsx
-import React from "react";
-import { supa } from "./supa";
+import React from 'react';
+import { useParams } from 'react-router-dom';
+import { supa } from './supa';
 
-export default function Standings({ season }) {
-  const [rows, setRows] = React.useState(null);
-  const [err, setErr] = React.useState("");
+const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET;
+
+async function fetchJsonFromStorage(path) {
+  const { data: url } = supa.storage.from(BUCKET).getPublicUrl(path);
+  const fetchUrl = `${url.publicUrl}?cb=${Date.now()}`;
+  const res = await fetch(fetchUrl, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`GET ${path} -> ${res.status}`);
+  return res.json();
+}
+
+export default function Standings({ season: seasonProp }) {
+  const params = useParams();
+  const season = params.season || seasonProp || '';
+  const [data, setData] = React.useState([]);
+  const [err, setErr] = React.useState('');
 
   React.useEffect(() => {
     if (!season) return;
     let live = true;
     (async () => {
+      setErr('');
       try {
-        const { data } = supa
-          .storage
-          .from(import.meta.env.VITE_SUPABASE_BUCKET)
-          .getPublicUrl(`stats/${season}/standings.json`);
-        const r = await fetch(data.publicUrl);
-        const json = r.ok ? await r.json() : [];
-        if (live) setRows(json);
+        const standings = await fetchJsonFromStorage(`stats/${season}/standings.json`);
+        if (live) setData(Array.isArray(standings) ? standings : []);
       } catch (e) {
-        if (live) setErr(e.message || "Failed to load standings");
+        if (live) setErr(e.message || 'Failed to load standings.');
       }
     })();
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [season]);
 
-  if (!season) return <div className="muted">Enter a season.</div>;
-  if (err) return <div className="muted">Error: {err}</div>;
-  if (!rows) return <div className="muted">Loading…</div>;
-  if (!rows.length) return <div className="muted">No standings for this season.</div>;
+  if (!season) return <div className="muted">Enter a season (top right).</div>;
 
   return (
     <div className="card">
-      <h3>Standings — {season}</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Team</th><th>W</th><th>L</th><th>T</th><th>PF</th><th>PA</th><th>Pct</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r,i)=>(
-            <tr key={i}>
-              <td>{r.team}</td><td>{r.w}</td><td>{r.l}</td><td>{r.t}</td>
-              <td>{r.pf}</td><td>{r.pa}</td><td>{(r.pct ?? 0).toFixed(3)}</td>
+      <h3>Standings</h3>
+      {err && <div className="muted">Error: {err}</div>}
+      {!data.length ? (
+        <div className="muted">No standings for this season.</div>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>W</th>
+              <th>L</th>
+              <th>T</th>
+              <th>Pct</th>
+              <th>PF</th>
+              <th>PA</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map((s) => (
+              <tr key={s.team}>
+                <td>{s.team}</td>
+                <td>{s.w}</td>
+                <td>{s.l}</td>
+                <td>{s.t}</td>
+                <td>{s.pct.toFixed(3)}</td>
+                <td>{s.pf}</td>
+                <td>{s.pa}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
