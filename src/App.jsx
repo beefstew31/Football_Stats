@@ -50,8 +50,6 @@ export default function App() {
         {/* deep routes */}
         <Route path="/season/:season/team/:teamName" element={<Teams />} />
         <Route path="/season/:season/player/:playerSlug" element={<Players />} />
-        <Route path="/season/:season/player/:playerSlug" element={<PlayerPage />} />
-
 
         {/* auth placeholders */}
         <Route path="/signup" element={<SignUp />} />
