@@ -99,6 +99,9 @@ export function PlayerPage() {
 
   const [playerName, team] = decodeURIComponent(playerSlug).split('__');
 
+  // At the end of Players.jsx, add:
+export default Players;
+
   React.useEffect(() => {
     if (!season || !playerSlug) return;
     let live = true;
