@@ -1,20 +1,21 @@
-import { createClient } from "@supabase/supabase-js";
+// src/supa.js
+import { createClient } from '@supabase/supabase-js';
 
-export const supa = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET; // e.g. "pa-football-stats"
+export const supa = createClient(supabaseUrl, supabaseKey);
 
+// Used by the upload page to authenticate uploads
+export const UPLOAD_PASSWORD = import.meta.env.VITE_UPLOAD_PASSWORD;
+
+// Helper to write JSON to storage
 export async function uploadJSON(path, data) {
-  const json = JSON.stringify(data);
   const { error } = await supa.storage
-    .from(BUCKET)
-    .upload(path, new Blob([json], { type: "application/json" }), {
-      cacheControl: "3600",
-      upsert: true, // <— important so republish overwrites
-      contentType: "application/json",
+    .from(import.meta.env.VITE_SUPABASE_BUCKET)
+    .upload(path, new Blob([JSON.stringify(data)], { type: 'application/json' }), {
+      upsert: true,
+      contentType: 'application/json'
     });
   if (error) throw error;
 }
