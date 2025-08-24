@@ -3,18 +3,14 @@ import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import "./styles.css";
 
-// import pages as named exports
 import Home from "./Home.jsx";
 import Teams from "./Teams.jsx";
 import Standings from "./Standings.jsx";
-import Players from "./Players.jsx";
+import Players, { PlayerPage } from "./Players.jsx";  // <-- default Players, named PlayerPage
 import Upload from "./Upload.jsx";
-import PlayerPage from "./PlayerPage.jsx";  // page for individual players
-import TeamPage from "./TeamPage.jsx";      // page for individual teams
+import TeamPage from "./TeamPage.jsx";  // page for individual teams
 
-// optional stubs for auth
-const SignUp = () => <div className="wrap"><h2>Sign up</h2><p className="muted">Hook up Supabase Auth later.</p></div>;
-const LogIn  = () => <div className="wrap"><h2>Log in</h2><p className="muted">Hook up Supabase Auth later.</p></div>;
+// … your auth stubs …
 
 export default function App() {
   const [season, setSeason] = useState(localStorage.getItem("fs_season") || "");
@@ -46,28 +42,5 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
-  );
-}
-
-function TopNav({ season, onSeasonChange }) {
-  return (
-    <header className="nav">
-      <div className="nav-left">
-      <Link className="brand" to="/">PennLive</Link>
-        <Link className="tab" to="/teams">Teams</Link>
-        <Link className="tab" to="/standings">Standings</Link>
-        <Link className="tab" to="/players">Player Stats</Link>
-        <Link className="tab" to="/upload">Upload</Link>
-      </div>
-      <div className="nav-right">
-        <label className="muted">Season</label>
-        <input
-          placeholder="e.g. 2025"
-          value={season}
-          onChange={(e) => onSeasonChange(e.target.value)}
-          className="season-input"
-        />
-      </div>
-    </header>
   );
 }
