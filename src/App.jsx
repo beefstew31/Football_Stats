@@ -1,16 +1,8 @@
 // src/App.jsx
-import React from 'react';
-import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
-import './styles.css';
 import React from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import "./styles.css";
 
-import Standings from './Standings.jsx';
-import Teams from './Teams.jsx';
-import { Players, PlayerPage } from './Players.jsx';  // note destructure both
-import Upload from './Upload.jsx';
-import Home from './Home.jsx';
 import * as StandingsMod from "./Standings.jsx";
 import * as TeamsMod from "./Teams.jsx";
 import * as PlayersMod from "./Players.jsx";
@@ -38,35 +30,35 @@ const LogIn = () => (
 );
 
 export default function App() {
-  const [season, setSeason] = React.useState(localStorage.getItem('fs_season') || '');
   const [season, setSeason] = React.useState(localStorage.getItem("fs_season") || "");
 
-const handleSeason = (v) => {
-setSeason(v);
-    localStorage.setItem('fs_season', v);
+  const handleSeason = (v) => {
+    setSeason(v);
     localStorage.setItem("fs_season", v);
-};
+  };
 
-return (
-@@ -26,12 +46,40 @@ export default function App() {
-<Route path="/teams" element={<Teams season={season} />} />
-<Route path="/players" element={<Players season={season} />} />
-<Route path="/upload" element={<Upload season={season} />} />
+  return (
+    <BrowserRouter>
+      <TopNav season={season} onSeasonChange={handleSeason} />
+      <Routes>
+        <Route path="/" element={<Home season={season} />} />
+        <Route path="/standings" element={<Standings season={season} />} />
+        <Route path="/teams" element={<Teams season={season} />} />
+        <Route path="/players" element={<Players season={season} />} />
+        <Route path="/upload" element={<Upload season={season} />} />
 
-{/* deep routes */}
-<Route path="/season/:season/team/:teamName" element={<Teams />} />
-        <Route path="/season/:season/player/:playerSlug" element={<PlayerPage />} />
-        {/* fallback */}
+        {/* deep routes */}
+        <Route path="/season/:season/team/:teamName" element={<Teams />} />
         <Route path="/season/:season/player/:playerSlug" element={<Players />} />
 
         {/* auth placeholders */}
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<LogIn />} />
 
-<Route path="*" element={<Navigate to="/" replace />} />
-</Routes>
-</BrowserRouter>
-);
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 function TopNav({ season, onSeasonChange }) {
