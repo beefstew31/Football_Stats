@@ -1,5 +1,6 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
+import "./styles.css";
 
 /** Safely import pages that might export default OR named */
 import * as StandingsMod from "./Standings.jsx";
