@@ -6,17 +6,13 @@ import "./styles.css";
 import Home from "./Home.jsx";
 import Teams from "./Teams.jsx";
 import Standings from "./Standings.jsx";
-import Players, { PlayerPage } from "./Players.jsx"; // default & named import
+import Players, { PlayerPage } from "./Players.jsx";  // Players list + detail
 import Upload from "./Upload.jsx";
-import TeamPage from "./TeamPage.jsx";
+import TeamPage from "./TeamPage.jsx";               // Page for individual teams
 
-// Stubs for future auth pages
-const SignUp = () => (
-  <div className="wrap"><h2>Sign up</h2><p className="muted">Hook up Supabase Auth later.</p></div>
-);
-const LogIn = () => (
-  <div className="wrap"><h2>Log in</h2><p className="muted">Hook up Supabase Auth later.</p></div>
-);
+// placeholders for auth (you can fill in with Supabase Auth later)
+const SignUp = () => <div className="wrap"><h2>Sign up</h2><p className="muted">Hook up Supabase Auth later.</p></div>;
+const LogIn = () => <div className="wrap"><h2>Log in</h2><p className="muted">Hook up Supabase Auth later.</p></div>;
 
 export default function App() {
   const [season, setSeason] = useState(localStorage.getItem("fs_season") || "");
@@ -35,16 +31,16 @@ export default function App() {
         <Route path="/standings" element={<Standings season={season} />} />
         <Route path="/players" element={<Players season={season} />} />
         <Route path="/upload" element={<Upload season={season} />} />
-
+        
         {/* detail routes */}
         <Route path="/season/:season/team/:teamName" element={<TeamPage />} />
         <Route path="/season/:season/player/:playerSlug" element={<PlayerPage />} />
 
-        {/* auth routes (stubs) */}
+        {/* auth pages */}
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<LogIn />} />
-
-        {/* catch-all */}
+        
+        {/* fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
